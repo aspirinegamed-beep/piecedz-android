@@ -2,6 +2,11 @@ CREATE TABLE IF NOT EXISTS users (
   id BIGSERIAL PRIMARY KEY,
   name VARCHAR(120) NOT NULL,
   phone VARCHAR(30) NOT NULL UNIQUE,
+  whatsapp VARCHAR(30) NOT NULL DEFAULT '',
+  facebook_url VARCHAR(500) NOT NULL DEFAULT '',
+  shop_address VARCHAR(300) NOT NULL DEFAULT '',
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION,
   password_hash TEXT NOT NULL,
   user_type VARCHAR(30) NOT NULL CHECK (user_type IN ('محل قطع غيار','تاجر','فرد','ورشة صيانة')),
   role VARCHAR(20) NOT NULL DEFAULT 'seller' CHECK (role IN ('seller','admin')),
@@ -50,3 +55,11 @@ CREATE TABLE IF NOT EXISTS reports (
   status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open','reviewed','dismissed')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+
+-- ترقية آمنة لقواعد البيانات الموجودة مسبقًا.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp VARCHAR(30) NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS facebook_url VARCHAR(500) NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS shop_address VARCHAR(300) NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;

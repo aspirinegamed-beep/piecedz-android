@@ -178,8 +178,12 @@ public class MainActivity extends Activity {
         actions.setGravity(Gravity.RIGHT);
         Button call = button("اتصال بالبائع", 0xFFF97316);
         Button share = button("مشاركة", 0xFF526777);
+        Button whatsapp = button("واتساب", 0xFF168A52);
+        Button facebook = button("فيسبوك", 0xFF1877F2);
+        Button maps = button("موقع المحل", 0xFF102A43);
         LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-2, dp(42)); ap.setMargins(dp(4), dp(8), 0, 0);
         actions.addView(call, ap); actions.addView(share, ap);
+        actions.addView(whatsapp, ap); actions.addView(facebook, ap); actions.addView(maps, ap);
         call.setOnClickListener(v -> {
             String phone = o.optString("phone","");
             if (phone.trim().isEmpty()) { toast("رقم الهاتف غير متوفر"); return; }
@@ -193,8 +197,42 @@ public class MainActivity extends Activity {
             Intent i = new Intent(Intent.ACTION_SEND); i.setType("text/plain"); i.putExtra(Intent.EXTRA_TEXT, s);
             startActivity(Intent.createChooser(i, "مشاركة العرض"));
         });
+        whatsapp.setOnClickListener(v -> {
+            String phone = o.optString("whatsapp", o.optString("phone", "")).trim();
+            String digits = phone.replaceAll("[^0-9]", "");
+            if (digits.startsWith("0")) digits = "213" + digits.substring(1);
+            if (digits.isEmpty()) { toast("رقم واتساب غير متوفر"); return; }
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("https://wa.me/" + digits)));
+            } catch (Exception e) { toast("تعذر فتح واتساب"); }
+        });
+        facebook.setOnClickListener(v -> {
+            String url = o.optString("facebook", "").trim();
+            if (!url.matches("(?i)^https://(www\\.)?facebook\\.com/.*")) {
+                toast("رابط صفحة فيسبوك غير متوفر"); return;
+            }
+            openExternal(url);
+        });
+        maps.setOnClickListener(v -> {
+            String address = o.optString("address", "").trim();
+            String lat = o.optString("latitude", "");
+            String lon = o.optString("longitude", "");
+            String query = !lat.isEmpty() && !lon.isEmpty()
+                ? lat + "," + lon : address;
+            if (query.isEmpty()) query = o.optString("city", "");
+            if (query.trim().isEmpty()) { toast("موقع المحل غير متوفر"); return; }
+            openExternal("https://www.google.com/maps/search/?api=1&query="
+                + Uri.encode(query));
+        });
         card.addView(actions);
         return card;
+    }
+
+    private void openExternal(String url) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (Exception e) { toast("تعذر فتح الرابط"); }
     }
 
     private void startBarcodeScan(EditText target) {
@@ -254,6 +292,11 @@ public class MainActivity extends Activity {
             new String[]{"محل قطع غيار","تاجر","فرد","ورشة صيانة"}));
         form.addView(sellerType);
         EditText phone = field(form, "رقم الهاتف");
+        EditText whatsapp = field(form, "رقم واتساب (اختياري)");
+        EditText facebook = field(form, "رابط صفحة فيسبوك https://...");
+        EditText address = field(form, "عنوان المحل");
+        EditText latitude = field(form, "خط العرض Latitude (اختياري)");
+        EditText longitude = field(form, "خط الطول Longitude (اختياري)");
         new AlertDialog.Builder(this).setTitle("إضافة عرض قطعة غيار").setView(sc)
             .setNegativeButton("إلغاء", (d,w)->{})
             .setPositiveButton("حفظ العرض", (d,w)-> {
@@ -273,6 +316,11 @@ public class MainActivity extends Activity {
                     o.put("seller", seller.getText().toString().trim().isEmpty() ? "بائع" : seller.getText().toString().trim());
                     o.put("sellerType", sellerType.getSelectedItem().toString());
                     o.put("phone", phone.getText().toString().trim());
+                    o.put("whatsapp", whatsapp.getText().toString().trim().isEmpty() ? phone.getText().toString().trim() : whatsapp.getText().toString().trim());
+                    o.put("facebook", facebook.getText().toString().trim());
+                    o.put("address", address.getText().toString().trim());
+                    o.put("latitude", latitude.getText().toString().trim());
+                    o.put("longitude", longitude.getText().toString().trim());
                     listings.put(o); saveListings(); buildUi(); toast("تم حفظ العرض على هذا الهاتف");
                 } catch (Exception e) { toast("تعذر حفظ العرض"); }
             }).show();

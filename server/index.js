@@ -54,7 +54,13 @@ function issueToken(user) {
   });
 }
 function safeUser(row) {
-  return { id: row.id, name: row.name, phone: row.phone, userType: row.user_type, role: row.role, createdAt: row.created_at };
+  return {
+    id: row.id, name: row.name, phone: row.phone,
+    userType: row.user_type, role: row.role, createdAt: row.created_at,
+    whatsapp: row.whatsapp || "", facebookUrl: row.facebook_url || "",
+    shopAddress: row.shop_address || "",
+    latitude: row.latitude ?? null, longitude: row.longitude ?? null
+  };
 }
 
 app.get("/api/health", async (_req, res) => {
@@ -103,6 +109,50 @@ app.get("/api/me", auth, async (req, res) => {
   } catch (e) { console.error(e.message); return fail(res, 500, "server_error"); }
 });
 
+
+app.get("/api/my/profile", auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id,name,phone,user_type,role,created_at,whatsapp,facebook_url,
+              shop_address,latitude,longitude
+       FROM users WHERE id=$1 AND is_active=TRUE`,
+      [req.user.id]
+    );
+    if (!result.rowCount) return fail(res, 404, "account_unavailable");
+    res.json({ profile: safeUser(result.rows[0]) });
+  } catch (e) { console.error(e.message); return fail(res, 500, "server_error"); }
+});
+
+app.patch("/api/my/profile", auth, async (req, res) => {
+  const b = req.body || {};
+  const whatsapp = cleanText(b.whatsapp, 30);
+  const facebookUrl = cleanText(b.facebookUrl, 500);
+  const shopAddress = cleanText(b.shopAddress, 300);
+  const latitude = b.latitude === "" || b.latitude == null ? null : Number(b.latitude);
+  const longitude = b.longitude === "" || b.longitude == null ? null : Number(b.longitude);
+
+  if ((whatsapp && !phonePattern.test(whatsapp)) ||
+      (facebookUrl && (!/^https:\/\/(www\.)?facebook\.com\//i.test(facebookUrl))) ||
+      (latitude !== null && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90)) ||
+      (longitude !== null && (!Number.isFinite(longitude) || longitude < -180 || longitude > 180)) ||
+      ((latitude === null) !== (longitude === null))) {
+    return fail(res, 400, "invalid_profile_fields");
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE users SET whatsapp=$1,facebook_url=$2,shop_address=$3,
+              latitude=$4,longitude=$5
+       WHERE id=$6 AND is_active=TRUE
+       RETURNING id,name,phone,user_type,role,created_at,whatsapp,
+                 facebook_url,shop_address,latitude,longitude`,
+      [whatsapp,facebookUrl,shopAddress,latitude,longitude,req.user.id]
+    );
+    if (!result.rowCount) return fail(res, 404, "account_unavailable");
+    res.json({ profile: safeUser(result.rows[0]) });
+  } catch (e) { console.error(e.message); return fail(res, 500, "server_error"); }
+});
+
 app.get("/api/listings", async (req, res) => {
   const q = cleanText(req.query.q, 100);
   const category = cleanText(req.query.category, 30);
@@ -111,7 +161,10 @@ app.get("/api/listings", async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT l.id,l.name,l.reference_number,l.category,l.price_dzd,l.quantity,l.condition,l.wilaya,l.description,l.created_at,
-              u.name AS seller_name,u.phone AS seller_phone,u.user_type AS seller_type
+              u.name AS seller_name,u.phone AS seller_phone,u.user_type AS seller_type,
+              u.whatsapp AS seller_whatsapp,u.facebook_url AS seller_facebook_url,
+              u.shop_address AS seller_shop_address,u.latitude AS seller_latitude,
+              u.longitude AS seller_longitude
        FROM listings l JOIN users u ON u.id=l.owner_id
        WHERE l.status='active' AND u.is_active=TRUE
        AND ($1='' OR l.name ILIKE '%'||$1||'%' OR l.reference_number ILIKE '%'||$1||'%')
