@@ -72,6 +72,14 @@ public class MainActivity extends Activity {
         header.addView(subtitle);
         root.addView(header);
 
+        // PièceDZ animated engine showcase
+        EngineAnimationView engineView = new EngineAnimationView(this);
+        LinearLayout.LayoutParams engineParams =
+                new LinearLayout.LayoutParams(-1, dp(190));
+        engineParams.setMargins(0, dp(12), 0, dp(12));
+        root.addView(engineView, engineParams);
+
+
         LinearLayout titleRow = new LinearLayout(this);
         titleRow.setGravity(Gravity.CENTER_VERTICAL);
         titleRow.setPadding(0, dp(16), 0, dp(6));
