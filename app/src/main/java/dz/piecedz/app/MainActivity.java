@@ -71,6 +71,9 @@ public class MainActivity extends Activity {
         TextView subtitle = text("منصتك الجزائرية لقطع الغيار", 15, 0xFFD9EAF7, false);
         header.addView(subtitle);
         root.addView(header);
+        Button apiButton = button("إعداد اتصال الخادم", 0xFF1877F2);
+        apiButton.setOnClickListener(v -> showApiSettings());
+        root.addView(apiButton, new LinearLayout.LayoutParams(-1, dp(44)));
 
         // PièceDZ animated engine showcase
         EngineAnimationView engineView = new EngineAnimationView(this);
@@ -143,6 +146,94 @@ public class MainActivity extends Activity {
         b.setBackground(shape(color, 12).drawable);
         b.setPadding(dp(10), 0, dp(10), 0);
         return b;
+    }
+
+
+    private String apiBaseUrl() {
+        return prefs.getString("api_base_url", "").trim().replaceAll("/+$", "");
+    }
+
+    private void showApiSettings() {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        input.setHint("https://api.example.com");
+        input.setText(apiBaseUrl());
+
+        new AlertDialog.Builder(this)
+            .setTitle("إعداد اتصال PièceDZ")
+            .setMessage("أدخل عنوان HTTPS الأساسي للخادم دون /api/listings")
+            .setView(input)
+            .setNegativeButton("إلغاء", null)
+            .setNeutralButton("مسح", (d, w) -> {
+                prefs.edit().remove("api_base_url").apply();
+                toast("تم مسح عنوان الخادم");
+            })
+            .setPositiveButton("حفظ واتصال", (d, w) -> {
+                String base = input.getText().toString().trim().replaceAll("/+$", "");
+                if (!base.matches("(?i)^https://[a-z0-9.-]+(?::[0-9]{1,5})?$")) {
+                    toast("العنوان غير صالح: استعمل عنوان HTTPS صحيحًا");
+                    return;
+                }
+                prefs.edit().putString("api_base_url", base).apply();
+                fetchServerListings();
+            })
+            .show();
+    }
+
+    private void fetchServerListings() {
+        String base = apiBaseUrl();
+        if (base.isEmpty()) {
+            toast("أدخل عنوان الخادم أولًا");
+            return;
+        }
+        toast("جارٍ الاتصال بالخادم...");
+        PieceDZApi.getListings(base, new PieceDZApi.ListingsCallback() {
+            @Override public void onSuccess(JSONArray items) {
+                JSONArray merged = new JSONArray();
+                for (int i = 0; i < listings.length(); i++) {
+                    JSONObject local = listings.optJSONObject(i);
+                    if (local != null &&
+                        !local.optString("_source", "").equals("server")) {
+                        merged.put(local);
+                    }
+                }
+                for (int i = 0; i < items.length(); i++) {
+                    JSONObject item = items.optJSONObject(i);
+                    if (item == null) continue;
+                    JSONObject card = new JSONObject();
+                    try {
+                        card.put("_source", "server");
+                        card.put("id", item.optString("id", ""));
+                        card.put("name", item.optString("name", "قطعة غيار"));
+                        card.put("ref", item.optString("reference_number", ""));
+                        card.put("category", item.optString("category", ""));
+                        Object price = item.opt("price_dzd");
+                        card.put("price", price == null || price == JSONObject.NULL
+                            ? "حسب الاتفاق" : String.valueOf(price));
+                        card.put("quantity", item.optString("quantity", "1"));
+                        card.put("condition", item.optString("condition", "غير محدد"));
+                        card.put("city", item.optString("wilaya", "الجزائر"));
+                        card.put("seller", item.optString("seller_name", "بائع"));
+                        card.put("sellerType", item.optString("seller_type", ""));
+                        card.put("phone", item.optString("seller_phone", ""));
+                        card.put("whatsapp", item.optString("seller_whatsapp", ""));
+                        card.put("facebook", item.optString("seller_facebook_url", ""));
+                        card.put("address", item.optString("seller_shop_address", ""));
+                        card.put("latitude", item.optString("seller_latitude", ""));
+                        card.put("longitude", item.optString("seller_longitude", ""));
+                        merged.put(card);
+                    } catch (Exception ignored) {}
+                }
+                listings = merged;
+                renderListings();
+                toast("تم جلب " + items.length() + " إعلان من الخادم");
+            }
+
+            @Override public void onError(String message) {
+                toast("تعذر الاتصال بالخادم: " + message);
+            }
+        });
     }
 
     private void renderListings() {
