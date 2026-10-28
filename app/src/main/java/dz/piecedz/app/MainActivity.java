@@ -14,6 +14,8 @@ import android.widget.*;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.Locale;
+import com.google.zxing.integration.android.IntentIntegrator;
+import com.google.zxing.integration.android.IntentResult;
 
 public class MainActivity extends Activity {
     private final String[] categories = {
@@ -24,6 +26,7 @@ public class MainActivity extends Activity {
     private String activeCategory = "الكل";
     private SharedPreferences prefs;
     private JSONArray listings;
+    private EditText barcodeTarget;
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -74,7 +77,7 @@ public class MainActivity extends Activity {
         titleRow.setPadding(0, dp(16), 0, dp(6));
         TextView title = text("ابحث عن القطعة اللي تحتاجها", 19, 0xFF102A43, true);
         titleRow.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
-        Button add = button("+ أضف عرض", 0xFF087E8B);
+        Button add = button("+ أضف عرض", 0xFFF97316);
         add.setOnClickListener(v -> showAddDialog());
         titleRow.addView(add);
         root.addView(titleRow);
@@ -93,6 +96,12 @@ public class MainActivity extends Activity {
             public void afterTextChanged(android.text.Editable e){}
         });
 
+        Button scanSearch = button("▦ مسح باركود للبحث", 0xFFF97316);
+        LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(-1, dp(46));
+        scanParams.setMargins(0, dp(8), 0, dp(4));
+        root.addView(scanSearch, scanParams);
+        scanSearch.setOnClickListener(v -> startBarcodeScan(searchBox));
+
         TextView catTitle = text("الأقسام", 18, 0xFF102A43, true);
         catTitle.setPadding(0, dp(16), 0, dp(6)); root.addView(catTitle);
         HorizontalScrollView hsv = new HorizontalScrollView(this);
@@ -100,7 +109,7 @@ public class MainActivity extends Activity {
         LinearLayout catRow = new LinearLayout(this);
         catRow.setOrientation(LinearLayout.HORIZONTAL);
         for (String c : categories) {
-            Button b = button(c, c.equals(activeCategory) ? 0xFF087E8B : 0xFFE1EAF0);
+            Button b = button(c, c.equals(activeCategory) ? 0xFFF97316 : 0xFFE1EAF0);
             b.setTextColor(c.equals(activeCategory) ? 0xFFFFFFFF : 0xFF102A43);
             LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, dp(42));
             p.setMargins(dp(3), dp(2), dp(3), dp(2));
@@ -160,14 +169,14 @@ public class MainActivity extends Activity {
         TextView name = text(o.optString("name","قطعة غيار"), 17, 0xFF102A43, true);
         card.addView(name);
         card.addView(text(o.optString("category","") + " • " + o.optString("city","الجزائر"), 12, 0xFF526777, false));
-        card.addView(text("السعر: " + o.optString("price","حسب الاتفاق") + " دج", 15, 0xFF087E8B, true));
+        card.addView(text("السعر: " + o.optString("price","حسب الاتفاق") + " دج", 15, 0xFFF97316, true));
         if (!o.optString("ref","").isEmpty()) card.addView(text("رقم القطعة: " + o.optString("ref",""), 12, 0xFF526777, false));
         card.addView(text("الحالة: " + o.optString("condition","جديد") + " • الكمية: " + o.optString("quantity","1"), 12, 0xFF526777, false));
         card.addView(text("البائع: " + o.optString("seller","") + " • " + o.optString("sellerType",""), 13, 0xFF102A43, false));
 
         LinearLayout actions = new LinearLayout(this);
         actions.setGravity(Gravity.RIGHT);
-        Button call = button("اتصال بالبائع", 0xFF087E8B);
+        Button call = button("اتصال بالبائع", 0xFFF97316);
         Button share = button("مشاركة", 0xFF526777);
         LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-2, dp(42)); ap.setMargins(dp(4), dp(8), 0, 0);
         actions.addView(call, ap); actions.addView(share, ap);
@@ -188,13 +197,49 @@ public class MainActivity extends Activity {
         return card;
     }
 
+    private void startBarcodeScan(EditText target) {
+        barcodeTarget = target;
+        try {
+            IntentIntegrator scanner = new IntentIntegrator(this);
+            scanner.setDesiredBarcodeFormats(IntentIntegrator.ALL_CODE_TYPES);
+            scanner.setPrompt("وجّه الكاميرا نحو باركود القطعة");
+            scanner.setBeepEnabled(false);
+            scanner.setOrientationLocked(false);
+            scanner.initiateScan();
+        } catch (Exception e) {
+            toast("تعذر تشغيل ماسح الباركود");
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        IntentResult result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
+        if (result != null) {
+            if (result.getContents() != null) {
+                EditText target = barcodeTarget;
+                if (target != null) {
+                    target.setText(result.getContents());
+                    target.setSelection(target.getText().length());
+                    toast("تمت قراءة الباركود");
+                }
+            } else {
+                toast("تم إلغاء المسح");
+            }
+            barcodeTarget = null;
+        }
+    }
+
     private void showAddDialog() {
         ScrollView sc = new ScrollView(this);
         LinearLayout form = new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18), dp(8), dp(18), dp(8));
         sc.addView(form);
         EditText name = field(form, "اسم القطعة *");
-        EditText ref = field(form, "رقم القطعة المرجعي (اختياري)");
+        EditText ref = field(form, "رقم القطعة أو الباركود (اختياري)");
+        Button scanRef = button("▦ مسح باركود القطعة", 0xFFF97316);
+        form.addView(scanRef, new LinearLayout.LayoutParams(-1, dp(44)));
+        scanRef.setOnClickListener(v -> startBarcodeScan(ref));
         Spinner cat = new Spinner(this);
         ArrayAdapter<String> ca = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
             new String[]{"سيارات","شاحنات","دراجات نارية","دراجات هوائية","هيدروليك"});
